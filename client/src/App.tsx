@@ -87,6 +87,12 @@ type ApiIcon = {
     originalName?: string;
     size?: number;
     mimeType?: string;
+    bytes?: number;
+    format?: string;
+    publicId?: string;
+    resourceType?: string;
+    width?: number;
+    height?: number;
   };
 };
 
@@ -102,6 +108,8 @@ const normalizeRoute = (hashValue: string): Route => {
 
 const mapIconFromApi = (icon: ApiIcon): IconEntry => {
   const file = icon.file || {};
+  const mediaType = file.resourceType || file.mimeType || "image";
+  const sizeValue = file.bytes ?? file.size;
   return {
     id: icon._id ?? icon.id ?? icon.name,
     name: icon.name,
@@ -110,9 +118,9 @@ const mapIconFromApi = (icon: ApiIcon): IconEntry => {
     tags: icon.tags || [],
     fileData: file.url,
     fileName: file.originalName,
-    fileSize: file.size ? `${(file.size / 1024).toFixed(1)} KB` : undefined,
+    fileSize: sizeValue ? `${(sizeValue / 1024).toFixed(1)} KB` : undefined,
     date: icon.createdAt ? new Date(icon.createdAt).toLocaleDateString() : undefined,
-    type: file.mimeType || "image"
+    type: mediaType
   };
 };
 
@@ -270,8 +278,9 @@ const App = () => {
       setIsAdmin(true);
       setLoginError("");
       navigate("admin-panel");
-    } catch (error: any) {
-      setLoginError(error.message || "Login failed");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Login failed";
+      setLoginError(message);
       setTimeout(() => setLoginError(""), 3000);
     }
   };

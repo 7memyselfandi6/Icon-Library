@@ -9,13 +9,23 @@ type IconItemProps = {
 };
 
 const IconItem = ({ icon, onPreview, onCopyHtml, onDownload }: IconItemProps) => {
+  const isVideo = (icon.type || "").startsWith("video");
   return (
     <div className="icon-card">
       <div className="icon-preview">
-        <img
-          src={icon.fileData || "https://via.placeholder.com/64"}
-          alt={icon.name}
-        />
+        {isVideo ? (
+          <video
+            src={icon.fileData || ""}
+            controls
+            muted
+            playsInline
+          />
+        ) : (
+          <img
+            src={icon.fileData || "https://via.placeholder.com/64"}
+            alt={icon.name}
+          />
+        )}
       </div>
       <div className="icon-name">{icon.name}</div>
       <div className="icon-category">

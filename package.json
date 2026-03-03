@@ -1,5 +1,7 @@
 {
   "dependencies": {
-    "mongodb": "^7.1.0"
+    "cloudinary": "^2.9.0",
+    "mongodb": "^7.1.0",
+    "multer": "^2.1.0"
   }
 }

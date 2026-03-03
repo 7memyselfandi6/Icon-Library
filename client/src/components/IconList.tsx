@@ -36,8 +36,20 @@ const IconList = ({ icons, apiBaseUrl }: IconListProps) => {
     setTimeout(() => setToastMessage(""), 2000);
   };
 
+  const isVideo = (icon: IconEntry | null) => (icon?.type || "").startsWith("video");
+
+  const buildHtml = (icon: IconEntry) =>
+    isVideo(icon)
+      ? `<video src="${icon.fileData || ""}" controls width="320"></video>`
+      : `<img src="${icon.fileData || ""}" alt="${icon.name}" width="32" height="32">`;
+
+  const buildMarkdown = (icon: IconEntry) =>
+    isVideo(icon)
+      ? `[${icon.name}](${icon.fileData || ""})`
+      : `![${icon.name}](${icon.fileData || ""})`;
+
   const handleCopyHtml = (icon: IconEntry) => {
-    const html = `<img src="${icon.fileData || ""}" alt="${icon.name}" width="32" height="32">`;
+    const html = buildHtml(icon);
     navigator.clipboard
       .writeText(html)
       .then(() => showToast("HTML copied to clipboard!"));
@@ -45,8 +57,8 @@ const IconList = ({ icons, apiBaseUrl }: IconListProps) => {
 
   const handleCopyModal = (type: "html" | "markdown") => {
     if (!previewIcon) return;
-    const html = `<img src="${previewIcon.fileData || ""}" alt="${previewIcon.name}" width="32" height="32">`;
-    const markdown = `![${previewIcon.name}](${previewIcon.fileData || ""})`;
+    const html = buildHtml(previewIcon);
+    const markdown = buildMarkdown(previewIcon);
     const text = type === "html" ? html : markdown;
     navigator.clipboard
       .writeText(text)
@@ -87,11 +99,8 @@ const IconList = ({ icons, apiBaseUrl }: IconListProps) => {
       });
   };
 
-  const modalHtml =
-    previewIcon &&
-    `<img src="${previewIcon.fileData || ""}" alt="${previewIcon.name}" width="32" height="32">`;
-  const modalMarkdown =
-    previewIcon && `![${previewIcon.name}](${previewIcon.fileData || ""})`;
+  const modalHtml = previewIcon && buildHtml(previewIcon);
+  const modalMarkdown = previewIcon && buildMarkdown(previewIcon);
 
   return (
     <>
@@ -157,10 +166,19 @@ const IconList = ({ icons, apiBaseUrl }: IconListProps) => {
           </div>
 
           <div className="modal-preview">
-            <img
-              src={previewIcon?.fileData || "https://via.placeholder.com/128"}
-              alt="Preview"
-            />
+            {previewIcon && isVideo(previewIcon) ? (
+              <video
+                src={previewIcon.fileData || ""}
+                controls
+                muted
+                playsInline
+              />
+            ) : (
+              <img
+                src={previewIcon?.fileData || "https://via.placeholder.com/128"}
+                alt="Preview"
+              />
+            )}
           </div>
 
           <div className="icon-details">

@@ -38,7 +38,6 @@ const AdminPanel = ({
     "upload" | "manage" | "categories" | "settings"
   >("upload");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);
   const [fileInfo, setFileInfo] = useState<{ name: string; size: string } | null>(
     null
   );
@@ -58,6 +57,7 @@ const AdminPanel = ({
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
 
   const totalIcons = icons.length;
 
@@ -108,22 +108,17 @@ const AdminPanel = ({
   };
 
   const handleFileSelect = (file: File | null) => {
-    if (!file || !file.type.startsWith("image/")) {
+    if (
+      !file ||
+      (!file.type.startsWith("image/") && !file.type.startsWith("video/"))
+    ) {
       return;
     }
     setUploadedFile(file);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result;
-      if (typeof result === "string") {
-        setFileDataUrl(result);
-        setFileInfo({
-          name: file.name,
-          size: `${(file.size / 1024).toFixed(1)} KB`
-        });
-      }
-    };
-    reader.readAsDataURL(file);
+    setFileInfo({
+      name: file.name,
+      size: `${(file.size / 1024).toFixed(1)} KB`
+    });
   };
 
   const handleUploadIcon = async () => {
@@ -131,11 +126,12 @@ const AdminPanel = ({
       alert("Please enter icon name");
       return;
     }
-    if (!uploadedFile || !fileDataUrl) {
-      alert("Please select an image file");
+    if (!uploadedFile) {
+      alert("Please select an image or video file");
       return;
     }
     try {
+      setIsUploading(true);
       const [mainCategory, subCategory] = iconCategory.split("-");
       const formData = new FormData();
       formData.append("file", uploadedFile);
@@ -151,7 +147,9 @@ const AdminPanel = ({
         body: formData
       });
       if (!response.ok) {
-        throw new Error("Upload failed");
+        const errorPayload = await response.json().catch(() => null);
+        const message = errorPayload?.error || "Upload failed";
+        throw new Error(message);
       }
       const payload = await response.json();
       const newIcon: IconEntry = {
@@ -162,24 +160,26 @@ const AdminPanel = ({
         tags: payload.tags || [],
         fileData: payload.file?.url,
         fileName: payload.file?.originalName,
-        fileSize: payload.file?.size
-          ? `${(payload.file.size / 1024).toFixed(1)} KB`
+        fileSize: payload.file?.bytes || payload.file?.size
+          ? `${((payload.file?.bytes || payload.file?.size) / 1024).toFixed(1)} KB`
           : undefined,
         date: payload.createdAt
           ? new Date(payload.createdAt).toLocaleDateString()
           : undefined,
-        type: payload.file?.mimeType || "image"
+        type: payload.file?.resourceType || payload.file?.mimeType || "image"
       };
       setIcons((prev) => [newIcon, ...prev]);
       setIconName("");
       setIconTags("");
       setUploadedFile(null);
-      setFileDataUrl(null);
       setFileInfo(null);
       await onRefreshCategories();
       showToast("Icon uploaded successfully!");
-    } catch {
-      showToast("Failed to upload icon");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to upload icon";
+      showToast(message);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -428,11 +428,11 @@ const AdminPanel = ({
               >
                 <i className="fas fa-cloud-upload-alt"></i>
                 <h3>Click to upload or drag and drop</h3>
-                <p>PNG, JPG, SVG, GIF (Max 5MB)</p>
+                <p>PNG, JPG, SVG, GIF, MP4 (Max 50MB)</p>
                 <input
                   type="file"
                   id="fileInput"
-                  accept="image/*"
+                  accept="image/*,video/*"
                   style={{ display: "none" }}
                   onChange={(event) =>
                     handleFileSelect(event.target.files?.[0] || null)
@@ -504,8 +504,10 @@ const AdminPanel = ({
                 className="btn btn-success"
                 style={{ width: "100%" }}
                 onClick={handleUploadIcon}
+                disabled={isUploading}
               >
-                <i className="fas fa-save"></i> Save Icon
+                <i className="fas fa-save"></i>{" "}
+                {isUploading ? "Uploading..." : "Save Icon"}
               </button>
             </div>
           )}

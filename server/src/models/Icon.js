@@ -2,12 +2,19 @@ import mongoose from "mongoose";
 
 const fileSchema = new mongoose.Schema(
   {
-    filename: { type: String, required: true },
-    originalName: { type: String, required: true },
-    mimeType: { type: String, required: true },
-    size: { type: Number, required: true },
-    path: { type: String, required: true },
-    url: { type: String, required: true }
+    filename: { type: String },
+    originalName: { type: String },
+    mimeType: { type: String },
+    size: { type: Number },
+    path: { type: String },
+    url: { type: String, required: true },
+    publicId: { type: String },
+    format: { type: String },
+    bytes: { type: Number },
+    width: { type: Number },
+    height: { type: Number },
+    resourceType: { type: String },
+    storage: { type: String, default: "cloudinary" }
   },
   { _id: false }
 );
