@@ -20,16 +20,16 @@ const uploadsDir = path.join(__dirname, "..", "uploads");
 const app = express();
 const port = process.env.PORT ? Number(process.env.PORT) : 4000;
 const mongoUri =
-  process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/icon_library";
+  process.env.MONGODB_URI_ONLINE || "mongodb://127.0.0.1:27017/icon_library";
 const jwtSecret = process.env.JWT_SECRET || "dev_secret_change_me";
 const tokenExpiresIn = process.env.TOKEN_EXPIRES_IN || "1d";
-if (!process.env.MONGODB_URI) {
-  process.stderr.write("MONGODB_URI missing, using default local database\n");
+if (!process.env.MONGODB_URI_ONLINE) {
+  process.stderr.write("MONGODB_URI_ONLINE missing, using default local database\n");
 }
 if (!process.env.JWT_SECRET) {
   process.stderr.write("JWT_SECRET missing, using development default\n");
 }
-process.env.MONGODB_URI = mongoUri;
+process.env.MONGODB_URI_ONLINE = mongoUri;
 process.env.JWT_SECRET = jwtSecret;
 process.env.TOKEN_EXPIRES_IN = tokenExpiresIn;
 
