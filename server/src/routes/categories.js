@@ -7,6 +7,7 @@ const router = express.Router();
 // Get all categories
 router.get("/", async (req, res, next) => {
   try {
+    res.set("Cache-Control", "no-store");
     const categories = await Category.find().sort({ main: 1, sub: 1 });
     res.json({ categories });
   } catch (error) {

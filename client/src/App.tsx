@@ -106,9 +106,20 @@ const App = () => {
   const [route, setRoute] = useState<Route>("home");
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [icons, setIcons] = useState<IconEntry[]>([]);
-  const [categories, setCategories] = useState<CategoryGroup[]>([]);
   const [rawCategories, setRawCategories] = useState<Category[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
+
+  const categories = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    rawCategories.forEach((c) => {
+      if (!map.has(c.main)) map.set(c.main, new Set());
+      map.get(c.main)?.add(c.sub);
+    });
+    return Array.from(map.entries()).map(([main, subs]) => ({
+      main,
+      subs: Array.from(subs),
+    }));
+  }, [rawCategories]);
   const [adminName, setAdminName] = useState("Admin");
   const [loginError, setLoginError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -136,24 +147,18 @@ const App = () => {
   }, []);
 
   const fetchCategories = useCallback(async () => {
-    const response = await fetch(`${API_BASE_URL}/api/categories`);
-    if (!response.ok) {
-      throw new Error("Failed to load categories");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/categories?t=${Date.now()}`);
+      if (!response.ok) {
+        throw new Error(`Failed to load categories: ${response.statusText}`);
+      }
+      const payload = await response.json();
+      const raw: Category[] = payload.categories || [];
+      setRawCategories(raw);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      throw error;
     }
-    const payload = await response.json();
-    const raw: Category[] = payload.categories || [];
-    setRawCategories(raw);
-
-    const map = new Map<string, Set<string>>();
-    raw.forEach((c) => {
-      if (!map.has(c.main)) map.set(c.main, new Set());
-      map.get(c.main)?.add(c.sub);
-    });
-    const grouped: CategoryGroup[] = Array.from(map.entries()).map(([main, subs]) => ({
-      main,
-      subs: Array.from(subs),
-    }));
-    setCategories(grouped);
   }, []);
 
   useEffect(() => {
@@ -545,6 +550,7 @@ escription">
             authToken={getStoredToken()}
             categories={categories}
             rawCategories={rawCategories}
+            // rawCategories={setRawCategories}
             onRefreshIcons={fetchIcons}
             onRefreshCategories={fetchCategories}
           />

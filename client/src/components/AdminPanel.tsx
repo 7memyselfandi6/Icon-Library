@@ -62,6 +62,7 @@ const AdminPanel = ({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
   
   // Icon Pagination
   const [iconPage, setIconPage] = useState(1);
@@ -138,11 +139,11 @@ const AdminPanel = ({
 
   const handleUploadIcon = async () => {
     if (!iconName.trim()) {
-      alert("Please enter icon name");
+      showToast("Please enter icon name");
       return;
     }
     if (!uploadedFile) {
-      alert("Please select an image or video file");
+      showToast("Please select an image or video file");
       return;
     }
     try {
@@ -273,7 +274,7 @@ const AdminPanel = ({
 
   const handleAddCategory = async () => {
     if (!subCategoryName.trim()) {
-      alert("Please enter sub category name");
+      showToast("Please enter sub category name");
       return;
     }
     try {
@@ -337,8 +338,23 @@ const AdminPanel = ({
   };
 
   const handleDeleteCategory = async (id: string) => {
-    if (window.confirm("Are you sure you want to delete this category?")) {
+    const category = rawCategories.find((c) => c._id === id);
+    if (!category) return;
+
+    const count = icons.filter(
+      (icon) =>
+        icon.mainCategory.toLowerCase() === category.main.toLowerCase() &&
+        icon.subCategory.toLowerCase() === category.sub.toLowerCase()
+    ).length;
+
+    const message =
+      count > 0
+        ? `This category is used by ${count} icon(s). Deleting it will leave these icons with their current category names, but the category will no longer be listed in filters. Are you sure you want to delete it?`
+        : "Are you sure you want to delete this category?";
+
+    if (window.confirm(message)) {
       try {
+        setDeletingCategoryId(id);
         const response = await fetch(`${apiBaseUrl}/api/categories/${id}`, {
           method: "DELETE",
           headers: { Authorization: `Bearer ${authToken}` }
@@ -350,6 +366,8 @@ const AdminPanel = ({
         showToast("Category deleted successfully!");
       } catch (error) {
         showToast(error instanceof Error ? error.message : "Failed to delete category");
+      } finally {
+        setDeletingCategoryId(null);
       }
     }
   };
@@ -761,6 +779,7 @@ const AdminPanel = ({
                                 <button
                                   className="action-btn edit"
                                   type="button"
+                                  data-testid={`edit-category-${cat._id}`}
                                   onClick={() => handleEditCategory(cat)}
                                 >
                                   <i className="fas fa-edit"></i>
@@ -768,9 +787,11 @@ const AdminPanel = ({
                                 <button
                                   className="action-btn delete"
                                   type="button"
+                                  data-testid={`delete-category-${cat._id}`}
+                                  disabled={deletingCategoryId === cat._id}
                                   onClick={() => handleDeleteCategory(cat._id)}
                                 >
-                                  <i className="fas fa-trash"></i>
+                                  <i className={`fas ${deletingCategoryId === cat._id ? "fa-spinner fa-spin" : "fa-trash"}`}></i>
                                 </button>
                               </div>
                             </td>
@@ -919,7 +940,7 @@ const AdminPanel = ({
       <div className={`modal ${showCategoryModal ? "active" : ""}`}>
         <div className="modal-content">
           <div className="modal-header">
-            <h3>${editingCategoryId ? "Edit Category" : "Add Category"}</h3>
+            <h3>{editingCategoryId ? "Edit Category" : "Add Category"}</h3>
             <button
               className="modal-close"
               type="button"
@@ -966,7 +987,7 @@ const AdminPanel = ({
             onClick={editingCategoryId ? handleSaveCategoryUpdate : handleAddCategory}
           >
             <i className={`fas ${isSavingCategory ? "fa-spinner fa-spin" : (editingCategoryId ? "fa-save" : "fa-plus")}`}></i>
-            ${isSavingCategory ? " Saving..." : (editingCategoryId ? " Save Changes" : " Add Category")}
+            {isSavingCategory ? " Saving..." : (editingCategoryId ? " Save Changes" : " Add Category")}
           </button>
         </div>
       </div>
