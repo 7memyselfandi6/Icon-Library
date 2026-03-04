@@ -3,19 +3,12 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import cors from "cors";
 import helmet from "helmet";
-import path from "path";
-import { fileURLToPath } from "url";
-import fs from "fs/promises";
 import authRoutes from "./routes/auth.js";
 import iconRoutes from "./routes/icons.js";
 import metaRoutes from "./routes/meta.js";
 import { ensureAdminUser } from "./services/admin.js";
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const uploadsDir = path.join(__dirname, "..", "uploads");
 
 const app = express();
 const port = process.env.PORT ? Number(process.env.PORT) : 4000;
@@ -77,8 +70,6 @@ app.use((req, _res, next) => {
   next();
 });
 
-app.use("/uploads", express.static(uploadsDir));
-
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
@@ -91,13 +82,18 @@ app.use((err, _req, res, _next) => {
   if (err?.name === "ZodError") {
     return res.status(400).json({ error: "Validation error", details: err.issues });
   }
+  if (err?.name === "MulterError") {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({ error: "File size exceeds limit" });
+    }
+    return res.status(400).json({ error: err.message || "File upload error" });
+  }
   const status = err.status || 500;
   const message = err.message || "Unexpected error";
   return res.status(status).json({ error: message });
 });
 
 const start = async () => {
-  await fs.mkdir(uploadsDir, { recursive: true });
   mongoose.connection.on("error", (error) => {
     process.stderr.write(`MongoDB connection error: ${error.message}\n`);
   });
