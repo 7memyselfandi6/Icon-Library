@@ -19,51 +19,13 @@ export type IconEntry = {
   type?: string;
 };
 
-type Route = "home" | "library" | "admin" | "admin-panel";
+export type Category = {
+  _id: string;
+  main: string;
+  sub: string;
+};
 
-const sampleIcons: IconEntry[] = [
-  {
-    id: 1,
-    name: "folder.png",
-    mainCategory: "image",
-    subCategory: "human",
-    fileData: "https://cdn-icons-png.flaticon.com/512/716/716784.png",
-    size: "24 KB",
-    path: "C:\\Users\\hp\\Music\\Projects\\Icon-png-file\\folder.png"
-  },
-  {
-    id: 2,
-    name: "pizza-icon.png",
-    mainCategory: "icon",
-    subCategory: "food",
-    fileData: "https://cdn-icons-png.flaticon.com/512/1046/1046781.png",
-    size: "12 KB"
-  },
-  {
-    id: 3,
-    name: "cat-icon.png",
-    mainCategory: "image",
-    subCategory: "animal",
-    fileData: "https://cdn-icons-png.flaticon.com/512/616/616430.png",
-    size: "18 KB"
-  },
-  {
-    id: 4,
-    name: "video-play.png",
-    mainCategory: "video",
-    subCategory: "news",
-    fileData: "https://cdn-icons-png.flaticon.com/512/3170/3170733.png",
-    size: "15 KB"
-  },
-  {
-    id: 5,
-    name: "logo-design.png",
-    mainCategory: "logo",
-    subCategory: "art",
-    fileData: "https://cdn-icons-png.flaticon.com/512/1055/1055683.png",
-    size: "22 KB"
-  }
-];
+type Route = "home" | "library" | "admin" | "admin-panel";
 
 type CategoryGroup = {
   main: string;
@@ -120,7 +82,7 @@ const mapIconFromApi = (icon: ApiIcon): IconEntry => {
     fileName: file.originalName,
     fileSize: sizeValue ? `${(sizeValue / 1024).toFixed(1)} KB` : undefined,
     date: icon.createdAt ? new Date(icon.createdAt).toLocaleDateString() : undefined,
-    type: mediaType
+    type: mediaType,
   };
 };
 
@@ -145,6 +107,7 @@ const App = () => {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [icons, setIcons] = useState<IconEntry[]>([]);
   const [categories, setCategories] = useState<CategoryGroup[]>([]);
+  const [rawCategories, setRawCategories] = useState<Category[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminName, setAdminName] = useState("Admin");
   const [loginError, setLoginError] = useState("");
@@ -154,7 +117,7 @@ const App = () => {
   );
   const [loginForm, setLoginForm] = useState({
     username: "admin",
-    password: "admin123"
+    password: "admin123",
   });
 
   const fetchIcons = useCallback(async (search?: string) => {
@@ -178,7 +141,19 @@ const App = () => {
       throw new Error("Failed to load categories");
     }
     const payload = await response.json();
-    setCategories(payload.categories || []);
+    const raw: Category[] = payload.categories || [];
+    setRawCategories(raw);
+
+    const map = new Map<string, Set<string>>();
+    raw.forEach((c) => {
+      if (!map.has(c.main)) map.set(c.main, new Set());
+      map.get(c.main)?.add(c.sub);
+    });
+    const grouped: CategoryGroup[] = Array.from(map.entries()).map(([main, subs]) => ({
+      main,
+      subs: Array.from(subs),
+    }));
+    setCategories(grouped);
   }, []);
 
   useEffect(() => {
@@ -192,8 +167,8 @@ const App = () => {
     const bootstrap = async () => {
       try {
         await Promise.all([fetchIcons(), fetchCategories()]);
-      } catch {
-        setIcons(sampleIcons);
+      } catch (error) {
+        console.error("Failed to bootstrap app:", error);
       }
     };
     bootstrap();
@@ -260,7 +235,7 @@ const App = () => {
       const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password }),
       });
       if (!response.ok) {
         throw new Error("Invalid credentials");
@@ -290,7 +265,7 @@ const App = () => {
     if (token) {
       await fetch(`${API_BASE_URL}/api/auth/logout`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       }).catch(() => null);
     }
     localStorage.removeItem("authToken");
@@ -361,22 +336,23 @@ const App = () => {
                     <i className="fas fa-moon"></i>
                   </div>
                   <h3 className="feature-title">Light & Dark Mode</h3>
-                  <p className="feature-description">
+                  <p className="feature-d
+escription">
                     Switch themes for comfortable viewing
                   </p>
                 </div>
               </div>
 
               <div className="stats-section">
-                <div className="stat-item">
+                <div className="stat-section">
                   <div className="stat-number">{totalIcons}</div>
                   <div className="stat-label">Total Icons</div>
                 </div>
-                <div className="stat-item">
+                <div className="stat-section">
                   <div className="stat-number">{totalCategories}</div>
                   <div className="stat-label">Categories</div>
                 </div>
-                <div className="stat-item">
+                <div className="stat-section">
                   <div className="stat-number">1</div>
                   <div className="stat-label">Admin</div>
                 </div>
@@ -484,7 +460,7 @@ const App = () => {
                       onChange={(event) =>
                         setLoginForm((prev) => ({
                           ...prev,
-                          username: event.target.value
+                          username: event.target.value,
                         }))
                       }
                     />
@@ -503,7 +479,7 @@ const App = () => {
                       onChange={(event) =>
                         setLoginForm((prev) => ({
                           ...prev,
-                          password: event.target.value
+                          password: event.target.value,
                         }))
                       }
                     />
@@ -568,6 +544,7 @@ const App = () => {
             apiBaseUrl={API_BASE_URL}
             authToken={getStoredToken()}
             categories={categories}
+            rawCategories={rawCategories}
             onRefreshIcons={fetchIcons}
             onRefreshCategories={fetchCategories}
           />

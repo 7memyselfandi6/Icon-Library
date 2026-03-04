@@ -5,6 +5,7 @@ import cors from "cors";
 import helmet from "helmet";
 import authRoutes from "./routes/auth.js";
 import iconRoutes from "./routes/icons.js";
+import categoryRoutes from "./routes/categories.js";
 import metaRoutes from "./routes/meta.js";
 import { ensureAdminUser } from "./services/admin.js";
 
@@ -77,6 +78,7 @@ app.get("/api/health", (_req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api", metaRoutes);
 app.use("/api/icons", iconRoutes);
+app.use("/api/categories", categoryRoutes);
 
 app.use((err, _req, res, _next) => {
   if (err?.name === "ZodError") {

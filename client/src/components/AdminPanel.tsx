@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
-import { IconEntry } from "../App";
+import { IconEntry, Category } from "../App";
 import ThemeToggle from "./ThemeToggle";
 
 type AdminPanelProps = {
@@ -15,6 +15,7 @@ type AdminPanelProps = {
   apiBaseUrl: string;
   authToken: string;
   categories: { main: string; subs: string[] }[];
+  rawCategories: Category[];
   onRefreshIcons: (search?: string) => Promise<void>;
   onRefreshCategories: () => Promise<void>;
 };
@@ -31,6 +32,7 @@ const AdminPanel = ({
   apiBaseUrl,
   authToken,
   categories,
+  rawCategories,
   onRefreshIcons,
   onRefreshCategories
 }: AdminPanelProps) => {
@@ -54,10 +56,16 @@ const AdminPanel = ({
   const [toastMessage, setToastMessage] = useState("");
   const [categoryMain, setCategoryMain] = useState("icon");
   const [subCategoryName, setSubCategoryName] = useState("");
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+  
+  // Icon Pagination
+  const [iconPage, setIconPage] = useState(1);
+  const iconsPerPage = 10;
 
   const totalIcons = icons.length;
 
@@ -94,17 +102,24 @@ const AdminPanel = ({
   }, [categoryGroups]);
 
   const filteredIcons = useMemo(() => {
-    if (!searchQuery.trim()) return icons;
-    const query = searchQuery.toLowerCase();
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return icons;
     return icons.filter((icon) => {
       const text = `${icon.name} ${icon.mainCategory} ${icon.subCategory}`.toLowerCase();
       return text.includes(query);
     });
   }, [icons, searchQuery]);
 
+  const paginatedIcons = useMemo(() => {
+    const start = (iconPage - 1) * iconsPerPage;
+    return filteredIcons.slice(start, start + iconsPerPage);
+  }, [filteredIcons, iconPage]);
+
+  const totalIconPages = Math.ceil(filteredIcons.length / iconsPerPage);
+
   const showToast = (message: string) => {
     setToastMessage(message);
-    setTimeout(() => setToastMessage(""), 2000);
+    setTimeout(() => setToastMessage(""), 3000);
   };
 
   const handleFileSelect = (file: File | null) => {
@@ -256,25 +271,100 @@ const AdminPanel = ({
     }
   };
 
+  const handleAddCategory = async () => {
+    if (!subCategoryName.trim()) {
+      alert("Please enter sub category name");
+      return;
+    }
+    try {
+      setIsSavingCategory(true);
+      const response = await fetch(`${apiBaseUrl}/api/categories`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ main: categoryMain, sub: subCategoryName.trim() })
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to add category");
+      }
+      await onRefreshCategories();
+      setSubCategoryName("");
+      setShowCategoryModal(false);
+      showToast("Category added successfully!");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to add category");
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+
+  const handleEditCategory = (cat: Category) => {
+    setEditingCategoryId(cat._id);
+    setCategoryMain(cat.main);
+    setSubCategoryName(cat.sub);
+    setShowCategoryModal(true);
+  };
+
+  const handleSaveCategoryUpdate = async () => {
+    if (!editingCategoryId || !subCategoryName.trim()) return;
+    try {
+      setIsSavingCategory(true);
+      const response = await fetch(`${apiBaseUrl}/api/categories/${editingCategoryId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ main: categoryMain, sub: subCategoryName.trim() })
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to update category");
+      }
+      await onRefreshCategories();
+      setEditingCategoryId(null);
+      setSubCategoryName("");
+      setShowCategoryModal(false);
+      showToast("Category updated successfully!");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to update category");
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    if (window.confirm("Are you sure you want to delete this category?")) {
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/categories/${id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+        if (!response.ok) {
+          throw new Error("Failed to delete category");
+        }
+        await onRefreshCategories();
+        showToast("Category deleted successfully!");
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Failed to delete category");
+      }
+    }
+  };
+
   const getMainCategoryName = (main: string) => {
     const names: Record<string, string> = {
       icon: "Icon",
       image: "Image",
       video: "Video",
-      logo: "logo"
+      logo: "Logo"
     };
     return names[main] || main;
   };
 
-  const getSubCategoryName = (main: string, sub: string) => {
-    const names: Record<string, Record<string, string>> = {
-      icon: { food: "Food", info: "Info", art: "Art" },
-      image: { human: "Human", animal: "Animal", country: "Country" },
-      video: { news: "News", promotion: "Promotion", funny: "Funny" },
-      logo: { company: "Company", brand: "Brand", product: "Product" }
-    };
-    return names[main]?.[sub] || sub;
-  };
+  const getSubCategoryName = (main: string, sub: string) => sub;
 
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword) {
@@ -367,7 +457,7 @@ const AdminPanel = ({
               <div className="stat-label">Total Icons</div>
             </div>
             <div className="stat-box">
-              <div className="stat-value">{categoryGroups.length}</div>
+              <div className="stat-value">{rawCategories.length}</div>
               <div className="stat-label">Categories</div>
             </div>
           </div>
@@ -524,7 +614,10 @@ const AdminPanel = ({
                   type="text"
                   placeholder="Search icons..."
                   value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onChange={(event) => {
+                    setSearchQuery(event.target.value);
+                    setIconPage(1);
+                  }}
                 />
               </div>
 
@@ -541,14 +634,14 @@ const AdminPanel = ({
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredIcons.length === 0 ? (
+                    {paginatedIcons.length === 0 ? (
                       <tr>
                         <td colSpan={6} style={{ textAlign: "center" }}>
                           No icons found
                         </td>
                       </tr>
                     ) : (
-                      filteredIcons.map((icon) => (
+                      paginatedIcons.map((icon) => (
                         <tr key={icon.id}>
                           <td>
                             <img
@@ -593,6 +686,26 @@ const AdminPanel = ({
                   </tbody>
                 </table>
               </div>
+              
+              {totalIconPages > 1 && (
+                <div className="pagination">
+                  <button 
+                    disabled={iconPage === 1} 
+                    onClick={() => setIconPage(p => p - 1)}
+                    className="btn btn-outline"
+                  >
+                    Previous
+                  </button>
+                  <span>Page {iconPage} of {totalIconPages}</span>
+                  <button 
+                    disabled={iconPage === totalIconPages} 
+                    onClick={() => setIconPage(p => p + 1)}
+                    className="btn btn-outline"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -603,7 +716,12 @@ const AdminPanel = ({
                 <button
                   className="btn btn-primary"
                   type="button"
-                  onClick={() => setShowCategoryModal(true)}
+                  onClick={() => {
+                    setEditingCategoryId(null);
+                    setCategoryMain("icon");
+                    setSubCategoryName("");
+                    setShowCategoryModal(true);
+                  }}
                 >
                   <i className="fas fa-plus"></i> Add Category
                 </button>
@@ -620,27 +738,41 @@ const AdminPanel = ({
                     </tr>
                   </thead>
                   <tbody>
-                    {categoryGroups.map((category) =>
-                      category.subs.map((sub) => {
-                        const mainKey = category.main.toLowerCase();
-                        const subKey = sub.toLowerCase();
+                    {rawCategories.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} style={{ textAlign: "center" }}>
+                          No categories found. Add one to get started.
+                        </td>
+                      </tr>
+                    ) : (
+                      rawCategories.map((cat) => {
                         const count = icons.filter(
                           (icon) =>
-                            icon.mainCategory.toLowerCase() === mainKey &&
-                            icon.subCategory.toLowerCase() === subKey
+                            icon.mainCategory.toLowerCase() === cat.main.toLowerCase() &&
+                            icon.subCategory.toLowerCase() === cat.sub.toLowerCase()
                         ).length;
                         return (
-                          <tr key={`${category.main}-${sub}`}>
-                            <td>{category.main}</td>
-                            <td>{sub}</td>
+                          <tr key={cat._id}>
+                            <td>{getMainCategoryName(cat.main)}</td>
+                            <td>{cat.sub}</td>
                             <td>{count}</td>
                             <td>
-                              <button className="action-btn edit" type="button">
-                                <i className="fas fa-edit"></i>
-                              </button>
-                              <button className="action-btn delete" type="button">
-                                <i className="fas fa-trash"></i>
-                              </button>
+                              <div className="action-btns">
+                                <button
+                                  className="action-btn edit"
+                                  type="button"
+                                  onClick={() => handleEditCategory(cat)}
+                                >
+                                  <i className="fas fa-edit"></i>
+                                </button>
+                                <button
+                                  className="action-btn delete"
+                                  type="button"
+                                  onClick={() => handleDeleteCategory(cat._id)}
+                                >
+                                  <i className="fas fa-trash"></i>
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -787,11 +919,15 @@ const AdminPanel = ({
       <div className={`modal ${showCategoryModal ? "active" : ""}`}>
         <div className="modal-content">
           <div className="modal-header">
-            <h3>Add Category</h3>
+            <h3>${editingCategoryId ? "Edit Category" : "Add Category"}</h3>
             <button
               className="modal-close"
               type="button"
-              onClick={() => setShowCategoryModal(false)}
+              onClick={() => {
+                setShowCategoryModal(false);
+                setEditingCategoryId(null);
+                setSubCategoryName("");
+              }}
             >
               &times;
             </button>
@@ -826,17 +962,11 @@ const AdminPanel = ({
             type="button"
             className="btn btn-success"
             style={{ width: "100%" }}
-            onClick={() => {
-              if (!subCategoryName.trim()) {
-                alert("Please enter sub category name");
-                return;
-              }
-              showToast(`Category ${categoryMain}/${subCategoryName} added!`);
-              setSubCategoryName("");
-              setShowCategoryModal(false);
-            }}
+            disabled={isSavingCategory}
+            onClick={editingCategoryId ? handleSaveCategoryUpdate : handleAddCategory}
           >
-            <i className="fas fa-plus"></i> Add Category
+            <i className={`fas ${isSavingCategory ? "fa-spinner fa-spin" : (editingCategoryId ? "fa-save" : "fa-plus")}`}></i>
+            ${isSavingCategory ? " Saving..." : (editingCategoryId ? " Save Changes" : " Add Category")}
           </button>
         </div>
       </div>
