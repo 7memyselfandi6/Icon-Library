@@ -75,11 +75,12 @@ const AdminPanel = ({
 
   const safeIcons = useMemo(() => icons ?? [], [icons]);
   const safeRawCategories = useMemo(() => rawCategories ?? [], [rawCategories]);
+  const safeCategories = useMemo(() => categories ?? [], [categories]);
   const totalIcons = safeIcons.length;
 
   const categoryGroups = useMemo(() => {
-    if (categories.length) {
-      return categories;
+    if (safeCategories.length) {
+      return safeCategories;
     }
     const map = new Map<string, Set<string>>();
     safeIcons.forEach((icon) => {
@@ -92,7 +93,7 @@ const AdminPanel = ({
       main,
       subs: Array.from(subs)
     }));
-  }, [categories, safeIcons]);
+  }, [safeCategories, safeIcons]);
 
   useEffect(() => {
     if (!categoryGroups.length) return;
@@ -531,7 +532,7 @@ const AdminPanel = ({
               <div className="stat-label">Total Icons</div>
             </div>
             <div className="stat-box">
-              <div className="stat-value">{rawCategories.length}</div>
+              <div className="stat-value">{safeRawCategories.length}</div>
               <div className="stat-label">Categories</div>
             </div>
           </div>
