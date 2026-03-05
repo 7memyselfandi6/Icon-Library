@@ -56,6 +56,31 @@ type ApiIcon = {
 const API_BASE_URL =
   (import.meta as { env?: ImportMetaEnv }).env?.VITE_API_URL ?? "";
 
+type ErrorBoundaryProps = {
+  fallback: React.ReactNode;
+  children?: React.ReactNode;
+};
+
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, { hasError: boolean }> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch() {}
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
+
 const normalizeRoute = (hashValue: string): Route => {
   if (hashValue === "library") return "library";
   if (hashValue === "admin") return "admin";
@@ -103,6 +128,9 @@ const App = () => {
   const [icons, setIcons] = useState<IconEntry[]>([]);
   const [rawCategories, setRawCategories] = useState<Category[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [iconsError, setIconsError] = useState("");
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [categoriesError, setCategoriesError] = useState("");
 
   const categories = useMemo(() => {
     const map = new Map<string, Set<string>>();
@@ -127,22 +155,31 @@ const App = () => {
   });
 
   const fetchIcons = useCallback(async (search?: string) => {
-    const params = new URLSearchParams();
-    params.set("limit", "200");
-    if (search?.trim()) {
-      params.set("search", search.trim());
+    try {
+      setIconsError("");
+      const params = new URLSearchParams();
+      params.set("limit", "200");
+      if (search?.trim()) {
+        params.set("search", search.trim());
+      }
+      const response = await fetch(`${API_BASE_URL}/api/icons?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error("Failed to load icons");
+      }
+      const payload = await response.json();
+      const data = Array.isArray(payload.data) ? payload.data : payload;
+      setIcons(Array.isArray(data) ? data.map(mapIconFromApi) : []);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load icons";
+      setIconsError(message);
+      throw error;
     }
-    const response = await fetch(`${API_BASE_URL}/api/icons?${params.toString()}`);
-    if (!response.ok) {
-      throw new Error("Failed to load icons");
-    }
-    const payload = await response.json();
-    const data = Array.isArray(payload.data) ? payload.data : payload;
-    setIcons(Array.isArray(data) ? data.map(mapIconFromApi) : []);
   }, []);
 
   const fetchCategories = useCallback(async () => {
     try {
+      setCategoriesLoading(true);
+      setCategoriesError("");
       const response = await fetch(`${API_BASE_URL}/api/categories?t=${Date.now()}`);
       if (!response.ok) {
         throw new Error(`Failed to load categories: ${response.statusText}`);
@@ -151,8 +188,12 @@ const App = () => {
       const raw: Category[] = payload.categories || [];
       setRawCategories(raw);
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load categories";
+      setCategoriesError(message);
       console.error("Error fetching categories:", error);
       throw error;
+    } finally {
+      setCategoriesLoading(false);
     }
   }, []);
 
@@ -532,23 +573,39 @@ escription">
 
       {route === "admin-panel" && (
         <div className="admin-panel-page">
-          <AdminPanel
-            icons={icons}
-            setIcons={setIcons}
-            adminName={adminName}
-            theme={theme}
-            onToggleTheme={toggleTheme}
-            onLogout={handleLogout}
-            onNavigate={navigate}
-            isAdmin={isAdmin}
-            apiBaseUrl={API_BASE_URL}
-            authToken={getStoredToken()}
-            categories={categories}
-            rawCategories={rawCategories}
-            // rawCategories={setRawCategories}
-            onRefreshIcons={fetchIcons}
-            onRefreshCategories={fetchCategories}
-          />
+          <ErrorBoundary
+            fallback={
+              <div className="content">
+                <h2 className="content-title">Something went wrong</h2>
+                <p>Try reloading the page or navigating back.</p>
+                <button className="btn btn-primary" type="button" onClick={() => navigate("admin-panel")}>
+                  Retry
+                </button>
+              </div>
+            }
+          >
+            <AdminPanel
+              icons={icons}
+              setIcons={setIcons}
+              adminName={adminName}
+              theme={theme}
+              onToggleTheme={toggleTheme}
+              onLogout={handleLogout}
+              onNavigate={navigate}
+              isAdmin={isAdmin}
+              apiBaseUrl={API_BASE_URL}
+              authToken={getStoredToken()}
+              categories={categories}
+              rawCategories={rawCategories}
+              categoriesLoading={categoriesLoading}
+              categoriesError={categoriesError}
+              onRefreshIcons={fetchIcons}
+              onRefreshCategories={fetchCategories}
+            />
+          </ErrorBoundary>
+          {iconsError ? (
+            <div className="toast show">{iconsError}</div>
+          ) : null}
         </div>
       )}
     </div>

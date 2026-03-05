@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { IconEntry, Category } from "../App";
 import ThemeToggle from "./ThemeToggle";
 
@@ -16,6 +16,8 @@ type AdminPanelProps = {
   authToken: string;
   categories: { main: string; subs: string[] }[];
   rawCategories: Category[];
+  categoriesLoading: boolean;
+  categoriesError: string;
   onRefreshIcons: (search?: string) => Promise<void>;
   onRefreshCategories: () => Promise<void>;
 };
@@ -33,6 +35,8 @@ const AdminPanel = ({
   authToken,
   categories,
   rawCategories,
+  categoriesLoading,
+  categoriesError,
   onRefreshIcons,
   onRefreshCategories
 }: AdminPanelProps) => {
@@ -63,19 +67,22 @@ const AdminPanel = ({
   const [isUploading, setIsUploading] = useState(false);
   const [isSavingCategory, setIsSavingCategory] = useState(false);
   const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
+  const [isRefreshingCategories, setIsRefreshingCategories] = useState(false);
   
   // Icon Pagination
   const [iconPage, setIconPage] = useState(1);
   const iconsPerPage = 10;
 
-  const totalIcons = icons.length;
+  const safeIcons = useMemo(() => icons ?? [], [icons]);
+  const safeRawCategories = useMemo(() => rawCategories ?? [], [rawCategories]);
+  const totalIcons = safeIcons.length;
 
   const categoryGroups = useMemo(() => {
     if (categories.length) {
       return categories;
     }
     const map = new Map<string, Set<string>>();
-    icons.forEach((icon) => {
+    safeIcons.forEach((icon) => {
       if (!map.has(icon.mainCategory)) {
         map.set(icon.mainCategory, new Set());
       }
@@ -85,7 +92,7 @@ const AdminPanel = ({
       main,
       subs: Array.from(subs)
     }));
-  }, [categories, icons]);
+  }, [categories, safeIcons]);
 
   useEffect(() => {
     if (!categoryGroups.length) return;
@@ -104,12 +111,12 @@ const AdminPanel = ({
 
   const filteredIcons = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
-    if (!query) return icons;
-    return icons.filter((icon) => {
+    if (!query) return safeIcons;
+    return safeIcons.filter((icon) => {
       const text = `${icon.name} ${icon.mainCategory} ${icon.subCategory}`.toLowerCase();
       return text.includes(query);
     });
-  }, [icons, searchQuery]);
+  }, [safeIcons, searchQuery]);
 
   const paginatedIcons = useMemo(() => {
     const start = (iconPage - 1) * iconsPerPage;
@@ -132,7 +139,7 @@ const AdminPanel = ({
     excludeId?: string | null
   ) => {
     const key = normalizeCategoryKey(main, sub);
-    return rawCategories.some(
+    return safeRawCategories.some(
       (category) =>
         normalizeCategoryKey(category.main, category.sub) === key &&
         category._id !== excludeId
@@ -323,6 +330,17 @@ const AdminPanel = ({
     }
   };
 
+  const handleRefreshCategories = useCallback(async () => {
+    try {
+      setIsRefreshingCategories(true);
+      await onRefreshCategories();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to refresh categories");
+    } finally {
+      setIsRefreshingCategories(false);
+    }
+  }, [onRefreshCategories]);
+
   const handleEditCategory = (cat: Category) => {
     setEditingCategoryId(cat._id);
     setCategoryMain(cat.main);
@@ -371,10 +389,10 @@ const AdminPanel = ({
   };
 
   const handleDeleteCategory = async (id: string) => {
-    const category = rawCategories.find((c) => c._id === id);
+    const category = safeRawCategories.find((c) => c._id === id);
     if (!category) return;
 
-    const count = icons.filter(
+    const count = safeIcons.filter(
       (icon) =>
         icon.mainCategory.toLowerCase() === category.main.toLowerCase() &&
         icon.subCategory.toLowerCase() === category.sub.toLowerCase()
@@ -459,6 +477,11 @@ const AdminPanel = ({
     }, 300);
     return () => window.clearTimeout(timer);
   }, [searchQuery, onRefreshIcons]);
+
+  useEffect(() => {
+    if (activeSection !== "categories") return;
+    handleRefreshCategories().catch(() => null);
+  }, [activeSection, handleRefreshCategories]);
 
   if (!isAdmin) {
     return null;
@@ -789,15 +812,37 @@ const AdminPanel = ({
                     </tr>
                   </thead>
                   <tbody>
-                    {rawCategories.length === 0 ? (
+                    {categoriesLoading || isRefreshingCategories ? (
+                      <tr>
+                        <td colSpan={4} style={{ textAlign: "center" }}>
+                          Loading categories...
+                        </td>
+                      </tr>
+                    ) : categoriesError ? (
+                      <tr>
+                        <td colSpan={4} style={{ textAlign: "center" }}>
+                          {categoriesError}
+                          <div style={{ marginTop: "0.75rem" }}>
+                            <button
+                              type="button"
+                              className="btn btn-outline"
+                              onClick={handleRefreshCategories}
+                              disabled={isRefreshingCategories}
+                            >
+                              {isRefreshingCategories ? "Refreshing..." : "Retry"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : safeRawCategories.length === 0 ? (
                       <tr>
                         <td colSpan={4} style={{ textAlign: "center" }}>
                           No categories found. Add one to get started.
                         </td>
                       </tr>
                     ) : (
-                      rawCategories.map((cat) => {
-                        const count = icons.filter(
+                      safeRawCategories.map((cat) => {
+                        const count = safeIcons.filter(
                           (icon) =>
                             icon.mainCategory.toLowerCase() === cat.main.toLowerCase() &&
                             icon.subCategory.toLowerCase() === cat.sub.toLowerCase()

@@ -23,6 +23,8 @@ const baseProps = {
   authToken: "token",
   categories: [{ main: "icon", subs: ["food"] }],
   rawCategories: mockCategories,
+  categoriesLoading: false,
+  categoriesError: "",
   onRefreshIcons: vi.fn(() => Promise.resolve()),
   onRefreshCategories: vi.fn(() => Promise.resolve())
 };
@@ -52,6 +54,12 @@ const clickModalSaveButton = () => {
   }
 };
 
+const waitForCategoriesLoaded = async () => {
+  await waitFor(() => {
+    expect(screen.queryByText("Loading categories...")).not.toBeInTheDocument();
+  });
+};
+
 describe("AdminPanel category management", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -60,9 +68,10 @@ describe("AdminPanel category management", () => {
     window.confirm = vi.fn(() => true);
   });
 
-  it("renders categories list", () => {
+  it("renders categories list", async () => {
     render(<AdminPanel {...baseProps} />);
     openCategoriesSection();
+    await waitForCategoriesLoaded();
     expect(screen.getByText("food", { selector: "td" })).toBeInTheDocument();
   });
 
@@ -113,6 +122,7 @@ describe("AdminPanel category management", () => {
   it("edits an existing category", async () => {
     render(<AdminPanel {...baseProps} />);
     openCategoriesSection();
+    await waitForCategoriesLoaded();
     fireEvent.click(screen.getByTestId("edit-category-cat1"));
     fireEvent.change(screen.getByPlaceholderText("e.g., Animals"), {
       target: { value: "updated-food" }
@@ -144,6 +154,7 @@ describe("AdminPanel category management", () => {
   it("deletes a category with confirmation", async () => {
     render(<AdminPanel {...baseProps} />);
     openCategoriesSection();
+    await waitForCategoriesLoaded();
 
     fetchMock.mockResolvedValueOnce({
       ok: true,
