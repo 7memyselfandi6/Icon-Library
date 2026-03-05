@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Header from "./components/Header";
 import IconList from "./components/IconList";
-import AdminPanel from "./components/AdminPanel";
+import CategoriesPage from "./components/CategoriesPage";
 import ThemeToggle from "./components/ThemeToggle";
 
 export type IconEntry = {
@@ -132,17 +132,6 @@ const App = () => {
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [categoriesError, setCategoriesError] = useState("");
 
-  const categories = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    rawCategories.forEach((c) => {
-      if (!map.has(c.main)) map.set(c.main, new Set());
-      map.get(c.main)?.add(c.sub);
-    });
-    return Array.from(map.entries()).map(([main, subs]) => ({
-      main,
-      subs: Array.from(subs),
-    }));
-  }, [rawCategories]);
   const [adminName, setAdminName] = useState("Admin");
   const [loginError, setLoginError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -258,7 +247,7 @@ const App = () => {
   }, []);
 
   const totalIcons = useMemo(() => icons.length, [icons]);
-  const totalCategories = useMemo(() => categories.length, [categories]);
+  const totalCategories = useMemo(() => rawCategories.length, [rawCategories]);
 
   const navigate = (next: Route) => {
     setRoute(next);
@@ -584,22 +573,18 @@ escription">
               </div>
             }
           >
-            <AdminPanel
+            <CategoriesPage
               icons={icons}
-              setIcons={setIcons}
               adminName={adminName}
               theme={theme}
               onToggleTheme={toggleTheme}
               onLogout={handleLogout}
               onNavigate={navigate}
-              isAdmin={isAdmin}
               apiBaseUrl={API_BASE_URL}
               authToken={getStoredToken()}
-              categories={categories}
               rawCategories={rawCategories}
               categoriesLoading={categoriesLoading}
               categoriesError={categoriesError}
-              onRefreshIcons={fetchIcons}
               onRefreshCategories={fetchCategories}
             />
           </ErrorBoundary>
