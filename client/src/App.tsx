@@ -53,8 +53,13 @@ type ApiIcon = {
   };
 };
 
-const API_BASE_URL =
-  (import.meta as { env?: ImportMetaEnv }).env?.VITE_API_URL ?? "";
+const getInitialApiBaseUrl = () => {
+  const envUrl = (import.meta as { env?: ImportMetaEnv }).env?.VITE_API_URL;
+  if (envUrl) return envUrl;
+  const stored = localStorage.getItem("apiBaseUrl");
+  if (stored) return stored;
+  return window.location.origin;
+};
 
 type ErrorBoundaryProps = {
   fallback: React.ReactNode;
@@ -131,6 +136,7 @@ const App = () => {
   const [iconsError, setIconsError] = useState("");
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [categoriesError, setCategoriesError] = useState("");
+  const [apiBaseUrl, setApiBaseUrl] = useState(getInitialApiBaseUrl);
 
   const [adminName, setAdminName] = useState("Admin");
   const [loginError, setLoginError] = useState("");
@@ -151,7 +157,7 @@ const App = () => {
       if (search?.trim()) {
         params.set("search", search.trim());
       }
-      const response = await fetch(`${API_BASE_URL}/api/icons?${params.toString()}`);
+      const response = await fetch(`${apiBaseUrl}/api/icons?${params.toString()}`);
       if (!response.ok) {
         throw new Error("Failed to load icons");
       }
@@ -163,13 +169,13 @@ const App = () => {
       setIconsError(message);
       throw error;
     }
-  }, []);
+  }, [apiBaseUrl]);
 
   const fetchCategories = useCallback(async () => {
     try {
       setCategoriesLoading(true);
       setCategoriesError("");
-      const response = await fetch(`${API_BASE_URL}/api/categories?t=${Date.now()}`);
+      const response = await fetch(`${apiBaseUrl}/api/categories?t=${Date.now()}`);
       if (!response.ok) {
         throw new Error(`Failed to load categories: ${response.statusText}`);
       }
@@ -184,7 +190,7 @@ const App = () => {
     } finally {
       setCategoriesLoading(false);
     }
-  }, []);
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
@@ -203,6 +209,29 @@ const App = () => {
     };
     bootstrap();
   }, [fetchIcons, fetchCategories]);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const apiOverride = urlParams.get("api");
+    if (apiOverride) {
+      localStorage.setItem("apiBaseUrl", apiOverride);
+      setApiBaseUrl(apiOverride);
+      return;
+    }
+    const loadConfig = async () => {
+      try {
+        const response = await fetch("/config.json", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (payload?.apiBaseUrl && typeof payload.apiBaseUrl === "string") {
+          setApiBaseUrl(payload.apiBaseUrl);
+        }
+      } catch {
+        return;
+      }
+    };
+    loadConfig();
+  }, []);
 
   useEffect(() => {
     document.body.setAttribute("data-theme", theme);
@@ -262,13 +291,21 @@ const App = () => {
     event.preventDefault();
     const { username, password } = loginForm;
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      const response = await fetch(`${apiBaseUrl}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
       if (!response.ok) {
-        throw new Error("Invalid credentials");
+        const payload = await response.json().catch(() => ({}));
+        const message =
+          payload?.error ||
+          (response.status === 404
+            ? "Auth endpoint not found. Check API configuration."
+            : response.status === 401
+            ? "Invalid credentials"
+            : "Login failed");
+        throw new Error(message);
       }
       const payload = await response.json();
       const storage = rememberAdmin ? localStorage : sessionStorage;
@@ -293,7 +330,7 @@ const App = () => {
   const handleLogout = async () => {
     const token = getStoredToken();
     if (token) {
-      await fetch(`${API_BASE_URL}/api/auth/logout`, {
+      await fetch(`${apiBaseUrl}/api/auth/logout`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       }).catch(() => null);
@@ -430,7 +467,7 @@ escription">
             onToggleTheme={toggleTheme}
           />
           <main className="main">
-            <IconList icons={icons} apiBaseUrl={API_BASE_URL} />
+            <IconList icons={icons} apiBaseUrl={apiBaseUrl} />
           </main>
           <div className="footer">
             <p>
@@ -580,7 +617,7 @@ escription">
               onToggleTheme={toggleTheme}
               onLogout={handleLogout}
               onNavigate={navigate}
-              apiBaseUrl={API_BASE_URL}
+              apiBaseUrl={apiBaseUrl}
               authToken={getStoredToken()}
               rawCategories={rawCategories}
               categoriesLoading={categoriesLoading}
