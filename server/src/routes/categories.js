@@ -1,5 +1,6 @@
 import express from "express";
 import Category from "../models/Category.js";
+import Icon from "../models/Icon.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -22,6 +23,9 @@ router.post("/", requireAuth, async (req, res, next) => {
     const category = await Category.create({ main, sub });
     res.status(201).json(category);
   } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(409).json({ error: "Category already exists" });
+    }
     next(error);
   }
 });
@@ -30,6 +34,10 @@ router.post("/", requireAuth, async (req, res, next) => {
 router.put("/:id", requireAuth, async (req, res, next) => {
   try {
     const { main, sub } = req.body;
+    const existing = await Category.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: "Category not found" });
+    }
     const category = await Category.findByIdAndUpdate(
       req.params.id,
       { main, sub },
@@ -38,8 +46,23 @@ router.put("/:id", requireAuth, async (req, res, next) => {
     if (!category) {
       return res.status(404).json({ error: "Category not found" });
     }
+    await Icon.updateMany(
+      {
+        mainCategory: existing.main,
+        subCategory: existing.sub
+      },
+      {
+        $set: {
+          mainCategory: category.main,
+          subCategory: category.sub
+        }
+      }
+    );
     res.json(category);
   } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(409).json({ error: "Category already exists" });
+    }
     next(error);
   }
 });

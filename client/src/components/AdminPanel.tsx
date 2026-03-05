@@ -123,6 +123,22 @@ const AdminPanel = ({
     setTimeout(() => setToastMessage(""), 3000);
   };
 
+  const normalizeCategoryKey = (main: string, sub: string) =>
+    `${main.trim().toLowerCase()}::${sub.trim().toLowerCase()}`;
+
+  const hasDuplicateCategory = (
+    main: string,
+    sub: string,
+    excludeId?: string | null
+  ) => {
+    const key = normalizeCategoryKey(main, sub);
+    return rawCategories.some(
+      (category) =>
+        normalizeCategoryKey(category.main, category.sub) === key &&
+        category._id !== excludeId
+    );
+  };
+
   const handleFileSelect = (file: File | null) => {
     if (
       !file ||
@@ -273,8 +289,13 @@ const AdminPanel = ({
   };
 
   const handleAddCategory = async () => {
-    if (!subCategoryName.trim()) {
+    const trimmedSub = subCategoryName.trim();
+    if (!trimmedSub) {
       showToast("Please enter sub category name");
+      return;
+    }
+    if (hasDuplicateCategory(categoryMain, trimmedSub)) {
+      showToast("Category already exists");
       return;
     }
     try {
@@ -285,11 +306,11 @@ const AdminPanel = ({
           "Content-Type": "application/json",
           Authorization: `Bearer ${authToken}`
         },
-        body: JSON.stringify({ main: categoryMain, sub: subCategoryName.trim() })
+        body: JSON.stringify({ main: categoryMain, sub: trimmedSub })
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to add category");
+        throw new Error(errorData.error || response.statusText || "Failed to add category");
       }
       await onRefreshCategories();
       setSubCategoryName("");
@@ -310,7 +331,19 @@ const AdminPanel = ({
   };
 
   const handleSaveCategoryUpdate = async () => {
-    if (!editingCategoryId || !subCategoryName.trim()) return;
+    const trimmedSub = subCategoryName.trim();
+    if (!editingCategoryId) {
+      showToast("No category selected");
+      return;
+    }
+    if (!trimmedSub) {
+      showToast("Please enter sub category name");
+      return;
+    }
+    if (hasDuplicateCategory(categoryMain, trimmedSub, editingCategoryId)) {
+      showToast("Category already exists");
+      return;
+    }
     try {
       setIsSavingCategory(true);
       const response = await fetch(`${apiBaseUrl}/api/categories/${editingCategoryId}`, {
@@ -319,11 +352,11 @@ const AdminPanel = ({
           "Content-Type": "application/json",
           Authorization: `Bearer ${authToken}`
         },
-        body: JSON.stringify({ main: categoryMain, sub: subCategoryName.trim() })
+        body: JSON.stringify({ main: categoryMain, sub: trimmedSub })
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to update category");
+        throw new Error(errorData.error || response.statusText || "Failed to update category");
       }
       await onRefreshCategories();
       setEditingCategoryId(null);

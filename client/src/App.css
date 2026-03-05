@@ -646,6 +646,13 @@ body[data-page="admin-panel"] .main {
   object-fit: contain;
 }
 
+.icon-preview video {
+  max-width: 120px;
+  max-height: 80px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
 .icon-name {
   font-weight: 600;
   margin-bottom: 0.25rem;

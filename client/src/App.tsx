@@ -27,11 +27,6 @@ export type Category = {
 
 type Route = "home" | "library" | "admin" | "admin-panel";
 
-type CategoryGroup = {
-  main: string;
-  subs: string[];
-};
-
 type ImportMetaEnv = {
   VITE_API_URL?: string;
 };

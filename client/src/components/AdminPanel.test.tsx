@@ -1,186 +1,177 @@
+import * as React from "react";
+import "@testing-library/jest-dom";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import AdminPanel from "./AdminPanel";
 
-// /**
-//  * Unit tests for AdminPanel component.
-//  * 
-//  * To run these tests, you need to install the following dependencies:
-//  * npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
-//  * 
-//  * Then run: npx vitest
-//  */
-// import { describe, it, expect, vi, beforeEach } from 'vitest';
+const mockIcons = [
+  { id: "1", name: "Icon 1", mainCategory: "icon", subCategory: "food", tags: [] }
+];
 
-// import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-// import AdminPanel from './AdminPanel';
+const mockCategories = [{ _id: "cat1", main: "icon", sub: "food" }];
 
-// // Mock fetch
-// global.fetch = vi.fn();
+const baseProps = {
+  icons: mockIcons,
+  setIcons: vi.fn(),
+  adminName: "Admin",
+  theme: "light" as const,
+  onToggleTheme: vi.fn(),
+  onLogout: vi.fn(),
+  onNavigate: vi.fn(),
+  isAdmin: true,
+  apiBaseUrl: "http://localhost:4000",
+  authToken: "token",
+  categories: [{ main: "icon", subs: ["food"] }],
+  rawCategories: mockCategories,
+  onRefreshIcons: vi.fn(() => Promise.resolve()),
+  onRefreshCategories: vi.fn(() => Promise.resolve())
+};
 
-// // Mock window.confirm
-// window.confirm = vi.fn(() => true);
+let fetchMock: ReturnType<typeof vi.fn>;
 
-// const mockIcons = [
-//   { id: '1', name: 'Icon 1', mainCategory: 'icon', subCategory: 'food', tags: [] }
-// ];
+const openCategoriesSection = () => {
+  fireEvent.click(screen.getByText("Categories", { selector: ".menu-item span" }));
+};
 
-// const mockCategories = [
-//   { _id: 'cat1', main: 'icon', sub: 'food' }
-// ];
+const openAddCategoryModal = () => {
+  openCategoriesSection();
+  const button = document.querySelector(
+    ".content-header .btn.btn-primary"
+  ) as HTMLButtonElement | null;
+  if (button) {
+    fireEvent.click(button);
+  }
+};
 
-// const mockProps = {
-//   icons: mockIcons,
-//   setIcons: vi.fn(),
-//   adminName: 'Admin',
-//   theme: 'light' as const,
-//   onToggleTheme: vi.fn(),
-//   onLogout: vi.fn(),
-//   onNavigate: vi.fn(),
-//   isAdmin: true,
-//   apiBaseUrl: 'http://localhost:4000',
-//   authToken: 'token',
-//   categories: [{ main: 'icon', subs: ['food'] }],
-//   rawCategories: mockCategories,
-//   onRefreshIcons: vi.fn(),
-//   onRefreshCategories: vi.fn(),
-// };
+const clickModalSaveButton = () => {
+  const button = document.querySelector(
+    ".modal.active .btn-success"
+  ) as HTMLButtonElement | null;
+  if (button) {
+    fireEvent.click(button);
+  }
+};
 
-// describe('AdminPanel Category Management', () => {
-//   beforeEach(() => {
-//     vi.clearAllMocks();
-//     (global.fetch as any).mockReset();
-//   });
+describe("AdminPanel category management", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    window.confirm = vi.fn(() => true);
+  });
 
-//   it('renders categories correctly', () => {
-//     render(<AdminPanel {...mockProps} />);
-//     // Switch to Categories tab
-//     fireEvent.click(screen.getByText('Categories'));
-//     expect(screen.getByText('food')).toBeInTheDocument();
-//   });
+  it("renders categories list", () => {
+    render(<AdminPanel {...baseProps} />);
+    openCategoriesSection();
+    expect(screen.getByText("food", { selector: "td" })).toBeInTheDocument();
+  });
 
-//   it('adds a new category successfully', async () => {
-//     render(<AdminPanel {...mockProps} />);
-//     fireEvent.click(screen.getByText('Categories'));
-//     fireEvent.click(screen.getByText('Add Category'));
+  it("validates empty category name on add", async () => {
+    render(<AdminPanel {...baseProps} />);
+    openAddCategoryModal();
+    clickModalSaveButton();
 
-//     const input = screen.getByPlaceholderText('e.g., Animals');
-//     fireEvent.change(input, { target: { value: 'Animals' } });
-    
-//     // Mock successful response
-//     (global.fetch as any).mockResolvedValueOnce({
-//       ok: true,
-//       json: async () => ({ _id: 'newcat', main: 'icon', sub: 'Animals' }),
-//     });
+    await waitFor(() => {
+      expect(screen.getByText("Please enter sub category name")).toBeInTheDocument();
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 
-//     // Find the save button in modal. It says " Add Category" (with leading space)
-//     const saveBtn = screen.getByText(' Add Category', { selector: 'button' });
-//     fireEvent.click(saveBtn);
+  it("prevents duplicate category creation", async () => {
+    render(<AdminPanel {...baseProps} />);
+    openAddCategoryModal();
+    fireEvent.change(screen.getByPlaceholderText("e.g., Animals"), {
+      target: { value: "food" }
+    });
+    clickModalSaveButton();
 
-//     await waitFor(() => {
-//       expect(mockProps.onRefreshCategories).toHaveBeenCalled();
-//     });
-//   });
+    await waitFor(() => {
+      expect(screen.getByText("Category already exists")).toBeInTheDocument();
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 
-//   it('handles empty category name error', async () => {
-//     render(<AdminPanel {...mockProps} />);
-//     fireEvent.click(screen.getByText('Categories'));
-//     fireEvent.click(screen.getByText('Add Category'));
+  it("adds a category successfully", async () => {
+    render(<AdminPanel {...baseProps} />);
+    openAddCategoryModal();
+    fireEvent.change(screen.getByPlaceholderText("e.g., Animals"), {
+      target: { value: "Animals" }
+    });
 
-//     // Try to save with empty name
-//     const saveBtn = screen.getByText(' Add Category', { selector: 'button' });
-//     fireEvent.click(saveBtn);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ _id: "newcat", main: "icon", sub: "Animals" })
+    } as Response);
 
-//     // Expect alert (mocked or just check fetch not called)
-//     // The component uses window.alert for empty name validation
-//     // Ideally we should mock alert
-//     const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
-    
-//     // Retrigger click
-//     fireEvent.click(saveBtn);
-    
-//     expect(alertMock).toHaveBeenCalledWith('Please enter sub category name');
-//     expect(global.fetch).not.toHaveBeenCalled();
-//     alertMock.mockRestore();
-//   });
+    clickModalSaveButton();
 
-//   it('handles edit category', async () => {
-//     render(<AdminPanel {...mockProps} />);
-//     fireEvent.click(screen.getByText('Categories'));
-    
-//     const editBtn = screen.getByTestId('edit-category-cat1');
-//     fireEvent.click(editBtn);
+    await waitFor(() => {
+      expect(baseProps.onRefreshCategories).toHaveBeenCalled();
+    });
+  });
 
-//     const input = screen.getByPlaceholderText('e.g., Animals');
-//     expect(input).toHaveValue('food');
-    
-//     fireEvent.change(input, { target: { value: 'updated-food' } });
+  it("edits an existing category", async () => {
+    render(<AdminPanel {...baseProps} />);
+    openCategoriesSection();
+    fireEvent.click(screen.getByTestId("edit-category-cat1"));
+    fireEvent.change(screen.getByPlaceholderText("e.g., Animals"), {
+      target: { value: "updated-food" }
+    });
 
-//     // Mock update response
-//     (global.fetch as any).mockResolvedValueOnce({
-//       ok: true,
-//       json: async () => ({ _id: 'cat1', main: 'icon', sub: 'updated-food' }),
-//     });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ _id: "cat1", main: "icon", sub: "updated-food" })
+    } as Response);
 
-//     const saveBtn = screen.getByText(' Save Changes', { selector: 'button' });
-//     fireEvent.click(saveBtn);
+    const saveButton = document.querySelector(
+      ".modal.active .btn-success"
+    ) as HTMLButtonElement | null;
+    if (saveButton) {
+      fireEvent.click(saveButton);
+    }
 
-//     await waitFor(() => {
-//       expect(global.fetch).toHaveBeenCalledWith(
-//         'http://localhost:4000/api/categories/cat1',
-//         expect.objectContaining({
-//           method: 'PUT',
-//           body: JSON.stringify({ main: 'icon', sub: 'updated-food' })
-//         })
-//       );
-//       expect(mockProps.onRefreshCategories).toHaveBeenCalled();
-//     });
-//   });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:4000/api/categories/cat1",
+        expect.objectContaining({
+          method: "PUT",
+          body: JSON.stringify({ main: "icon", sub: "updated-food" })
+        })
+      );
+    });
+  });
 
-//   it('handles delete category', async () => {
-//     render(<AdminPanel {...mockProps} />);
-//     fireEvent.click(screen.getByText('Categories'));
-    
-//     const deleteBtn = screen.getByTestId('delete-category-cat1');
-    
-//     // Mock delete response
-//     (global.fetch as any).mockResolvedValueOnce({
-//       ok: true,
-//       json: async () => ({ message: 'Category deleted' }),
-//     });
+  it("deletes a category with confirmation", async () => {
+    render(<AdminPanel {...baseProps} />);
+    openCategoriesSection();
 
-//     fireEvent.click(deleteBtn);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ message: "Category deleted" })
+    } as Response);
 
-//     await waitFor(() => {
-//       expect(global.fetch).toHaveBeenCalledWith(
-//         'http://localhost:4000/api/categories/cat1',
-//         expect.objectContaining({ method: 'DELETE' })
-//       );
-//       expect(mockProps.onRefreshCategories).toHaveBeenCalled();
-//     });
-//   });
+    fireEvent.click(screen.getByTestId("delete-category-cat1"));
 
-//   it('handles network failure during add', async () => {
-//     render(<AdminPanel {...mockProps} />);
-//     fireEvent.click(screen.getByText('Categories'));
-//     fireEvent.click(screen.getByText('Add Category'));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:4000/api/categories/cat1",
+        expect.objectContaining({ method: "DELETE" })
+      );
+    });
+  });
 
-//     const input = screen.getByPlaceholderText('e.g., Animals');
-//     fireEvent.change(input, { target: { value: 'Animals' } });
-    
-//     // Mock failure
-//     (global.fetch as any).mockRejectedValueOnce(new Error('Network error'));
+  it("handles network failure during add", async () => {
+    render(<AdminPanel {...baseProps} />);
+    openAddCategoryModal();
+    fireEvent.change(screen.getByPlaceholderText("e.g., Animals"), {
+      target: { value: "Animals" }
+    });
 
-//     const saveBtn = screen.getByText(' Add Category', { selector: 'button' });
-//     fireEvent.click(saveBtn);
+    fetchMock.mockRejectedValueOnce(new Error("Network error"));
+    clickModalSaveButton();
 
-//     // Should show toast (we can't easily check toast state without more setup, but we check fetch was called)
-//     await waitFor(() => {
-//       expect(global.fetch).toHaveBeenCalled();
-//     });
-//     // Ensure onRefreshCategories NOT called if fetch fails (Wait, it throws)
-//     // But in catch block, it calls showToast.
-//     // Ideally we verify it didn't call onRefreshCategories if fetch threw before success?
-//     // In handleAddCategory:
-//     // try { await fetch ... if (!ok) throw ... await onRefreshCategories ... } catch ...
-//     // So onRefreshCategories is NOT called on error.
-//     expect(mockProps.onRefreshCategories).not.toHaveBeenCalled();
-//   });
-// });
+    await waitFor(() => {
+      expect(screen.getByText("Network error")).toBeInTheDocument();
+    });
+  });
+});
