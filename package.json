@@ -3,5 +3,11 @@
     "cloudinary": "^2.9.0",
     "mongodb": "^7.1.0",
     "multer": "^2.1.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "jsdom": "^28.1.0",
+    "vitest": "^4.0.18"
   }
 }
